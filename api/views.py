@@ -1,54 +1,43 @@
 from multiprocessing import context
 from django.http import JsonResponse
 from django.shortcuts import render
-#from requests import request
+from requests import request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .serializers import *
 from .models import *
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.filters import SearchFilter
+from rest_framework_simplejwt.authentication import JWTAuthentication
 # Create your views here.
 
 #Get all books
 class GetBooksApiView(APIView):
+    permission_classes = [IsAuthenticated]
+    filter_backends = [SearchFilter]
+    filterset_fields = ['title','author']
     def get(self,request):
-        permission_classes = [AllowAny] 
         qs=Book.objects.all()
-        filter_backends = [SearchFilter]
-        search_fields = ['title','author']
         data=BookSerializer(qs,many=True).data
         return Response({'Books':data,'message':'Book are available'},status=200)
 
     def post(self,request):
-        permission_classes = [IsAuthenticated]
         qs = BookSerializer(data=request.data)
         if qs.is_valid():
             qs.save()
-            return Response({'message':'Successfully'},status=200)
-        return Response({'message':'Something went wrong'},status=200)
+            return Response({'message':'Book has posted'},status=201)
+        return Response({'message':qs.errors})
 
-    def delete(self,request,pk):
-        permission_classes = [IsAuthenticated]
-        qs = Book.objects.get(id=pk)
+    def delete(self,request,*args,**kwargs):
+        user = request.user
+        qs = Book.objects.get(id=self.kwargs.get('pk'))
         qs.delete()
-        return Response({'Msg':'Order has canceled'})
-
-'''class GetCategoryAPIView(APIView):
-    permission_classes = [AllowAny]
-    def get(self,request):
-        #qs = Book.objects.select_related('category').all()
-        qs = Book.objects.prefetch_related('category').all() 
-        data = BookSerializer(qs,many=True).data
-        return Response({'Category':data,'message':'Category'},status=200)'''
-
+        return Response({'message':'Book has deleted'})
 #Get all orders
 class OrderApiView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     def get(self,request):
         qs=Order.objects.all().order_by('date_created')
-        #filter_backends = [OrderingFilter]
-        #ordering_fields =['date_created']
         data=OrderSerializer(qs,many=True).data
         return Response({'Orders':data,'message':'Orders'},status=200)
 
@@ -57,12 +46,13 @@ class OrderApiView(APIView):
         if qs.is_valid():
             qs.save()
             return Response({'message':'Orders Successfully'},status=200)
-        return Response({'message':'Something went wrong'},status=200)
+        return Response({'message':qs.errors},status=200)
 
-    def delete(self,request,pk):
-        qs = Order.objects.get(id=pk)
+    def delete(self,request,*args,**kwargs):
+        user = request.user
+        qs = Order.objects.get(user=user,id=self.kwargs.get('pk'))
         qs.delete()
-        return Response({'Msg':'Order has canceled'})
+        return Response({'msg':'deleted'})
 
 #Get Most ordered books
 class MostOrderAPIView(APIView):
